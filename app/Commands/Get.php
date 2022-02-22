@@ -15,7 +15,7 @@ class Get extends Command
      *
      * @var string
      */
-    protected $signature = 'get';
+    protected $signature = 'get {--C|cacheClear : Clear cache before displaying gist list}';
 
     /**
      * The description of the command.
@@ -24,6 +24,8 @@ class Get extends Command
      */
     protected $description = 'Copies gist to file';
 
+    private string $cacheKey = 'gists';
+
     /**
      * Execute the console command.
      *
@@ -31,6 +33,7 @@ class Get extends Command
      */
     public function handle(): void
     {
+        if($this->option('cacheClear')) Cache::forget($this->cacheKey);
         $gists = $this->getGists();
         $gistList = [];
         $i = 1;
@@ -47,7 +50,7 @@ class Get extends Command
     public function getGists(): Collection
     {
         return Cache::rememberForever(
-            'gists',
+            $this->cacheKey,
             fn() => Http::withToken(env('GH_PERSONAL_ACCESS_TOKEN'))->get('https://api.github.com/gists')->collect()
         );
     }
