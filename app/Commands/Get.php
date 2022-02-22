@@ -44,7 +44,9 @@ class Get extends Command
             }
         }
         $selectedGist = $this->choice('Select a gist', $gistList);
-        $this->info($selectedGist);
+        $selectedRawUrl = trim(explode('|', $selectedGist)[1]);
+        $gistBody = Http::get($selectedRawUrl)->body();
+        $this->info($gistBody);
     }
 
     public function getGists(): Collection
