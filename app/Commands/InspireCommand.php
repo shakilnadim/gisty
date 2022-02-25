@@ -3,6 +3,7 @@
 namespace App\Commands;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Http;
 use LaravelZero\Framework\Commands\Command;
 use function Termwind\{render};
 
@@ -29,14 +30,8 @@ class InspireCommand extends Command
      */
     public function handle()
     {
-        render(<<<'HTML'
-            <div class="py-1 ml-2">
-                <div class="px-1 bg-blue-300 text-black">Laravel Zero</div>
-                <em class="ml-1">
-                  Simplicity is the ultimate sophistication.
-                </em>
-            </div>
-        HTML);
+        $inspire = Http::get('https://zenquotes.io/api/random')->json();
+        render("<div class='text-cyan-500'>{$inspire[0]['h']}</div>");
     }
 
     /**
