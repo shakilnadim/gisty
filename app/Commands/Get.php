@@ -31,6 +31,8 @@ class Get extends Command
     private string $gistFileName;
     private string $fileContents;
     private string $fileName;
+    private array $contentArr = [];
+    private bool $shouldAddTab = false;
 
     /**
      * Execute the console command.
@@ -46,9 +48,11 @@ class Get extends Command
         $gistBody = $this->getGistFromUser() . PHP_EOL;
         $this->setFileNameFromUser();
         $this->setFileContents();
+        $this->contentArr = explode(PHP_EOL, $this->fileContents);
         $lineNumber = $this->getLineNumber();
 
-        if ($this->writeToFile($gistBody, $lineNumber)) render('<p class="bg-green p-1">Successful</p>');
+        if ($lineNumber === 0) $this->error('No class found');
+        elseif ($this->writeToFile($gistBody, $lineNumber)) render('<p class="bg-green p-1">Successful</p>');
         else render('<p class="bg-red p-1">Failure! Something went wrong</p>');
     }
 
@@ -101,7 +105,41 @@ class Get extends Command
     {
         if (!File::exists($this->fileName)) return 0;
         if (trim($this->fileContents) === '') return 0;
-        return $this->getLineNumberFromUser();
+        $lineNumber = $this->getLineNumberFromUser();
+
+        if ($lineNumber === -1) {
+            $isFileAClass = $this->choice('Is the target file a class?', [1 => 'true', 2 => 'false'], 2);
+            $isFileAClass = $isFileAClass === 'true';
+            if ($isFileAClass) $this->shouldAddTab = true;
+            return $this->getLastLineOfFile($isFileAClass);
+        }
+
+        return $lineNumber;
+    }
+
+    public function getLineNumberFromUser(): int
+    {
+        while (true) {
+            $lineNumber = $this->ask('Input line number') ?? -1;
+            if (filter_var($lineNumber, FILTER_VALIDATE_INT) && $lineNumber !== 0 && $lineNumber == -1) return (int)$lineNumber;
+            $this->error('Line number has to be a positive integer value');
+        }
+    }
+
+
+    private function getLastLineOfFile(bool $isFileAClass = false): int
+    {
+        if (!$isFileAClass) return count($this->contentArr);
+
+        for ($i=count($this->contentArr) - 1; $i >= 0; $i--) {
+            if (trim($this->contentArr[$i]) === '}') return ++$i;
+            if (str_ends_with(trim($this->contentArr[$i]), '}')) {
+                $this->contentArr[$i] = substr($this->contentArr[$i], 0, -1);
+                array_splice($this->contentArr, ++$i, 0, '}');
+                return ++$i;
+            }
+        }
+        return 0;
     }
 
     private function setFileContents(): void
@@ -109,22 +147,23 @@ class Get extends Command
         $this->fileContents = File::get($this->fileName);
     }
 
-    public function getLineNumberFromUser(): int
-    {
-        while (true) {
-            $lineNumber = $this->ask('Input line number');
-            if (filter_var($lineNumber, FILTER_VALIDATE_INT) && $lineNumber > 0) return (int)$lineNumber;
-            $this->error('Line number has to be a positive integer value');
-        }
-    }
-
     private function writeToFile($body, $lineNumber): bool
     {
         if ($lineNumber === 0) return File::put($this->fileName, $body);
-        $contentArr = explode(PHP_EOL, $this->fileContents);
-        array_splice($contentArr, $lineNumber-1, 0, $body);
-        $body = implode(PHP_EOL, $contentArr);
+
+        if ($this->shouldAddTab) $body = $this->addTabOnEachLine($body);
+        array_splice($this->contentArr, $lineNumber-1, 0, $body);
+        $body = implode(PHP_EOL, $this->contentArr);
         return File::put($this->fileName, $body);
+    }
+
+    public function addTabOnEachLine(string $body): string
+    {
+        $body = explode(PHP_EOL, $body);
+        for($i=0; $i<count($body); $i++) {
+            $body[$i] = "\t{$body[$i]}";
+        }
+        return implode(PHP_EOL, $body);
     }
 
     /**
