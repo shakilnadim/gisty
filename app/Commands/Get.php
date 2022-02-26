@@ -29,6 +29,8 @@ class Get extends Command
     private string $cacheKey = 'gists';
     private array $gistList = [];
     private string $gistFileName;
+    private string $fileContents;
+    private string $fileName;
 
     /**
      * Execute the console command.
@@ -42,9 +44,12 @@ class Get extends Command
         $gists = $this->getGists();
         $this->makeGistList($gists);
         $gistBody = $this->getGistFromUser() . PHP_EOL;
-        $fileName = $this->getFileNameFromUser();
-        File::put($fileName, $gistBody);
-        render('<p class="bg-green p-1">Successful</p>');
+        $this->setFileNameFromUser();
+        $this->setFileContents();
+        $lineNumber = $this->getLineNumber();
+
+        if ($this->writeToFile($gistBody, $lineNumber)) render('<p class="bg-green p-1">Successful</p>');
+        else render('<p class="bg-red p-1">Failure! Something went wrong</p>');
     }
 
     public function getGists(): Collection
@@ -66,7 +71,7 @@ class Get extends Command
         }
     }
 
-    public function getGistFromUser(): string
+    private function getGistFromUser(): string
     {
         $selectedGist = $this->choice('Select a gist', $this->gistList);
         $this->gistFileName = trim(explode('|', $selectedGist)[0]);
@@ -74,21 +79,52 @@ class Get extends Command
         return Http::get($gistRawUrl)->body();
     }
 
-    private function getFileNameFromUser(): string
+    private function setFileNameFromUser(): void
     {
-        $path = getcwd() .'/'. $this->ask('input file name');
+        $path = getcwd() .'/'. $this->ask('Input file name');
         if ($this->isFileName($path)) {
             File::ensureDirectoryExists(File::dirname($path));
-            return $path;
+            $this->fileName = $path;
+        } else {
+            File::ensureDirectoryExists($path);
+            $this->fileName = $path.'/'.$this->gistFileName;
         }
-        File::ensureDirectoryExists($path);
-        return $path.'/'.$this->gistFileName;
     }
 
     public function isFileName($path): bool
     {
         $splitPath = explode('/', $path);
         return str_contains($splitPath[count($splitPath) - 1], '.');
+    }
+
+    private function getLineNumber(): int
+    {
+        if (!File::exists($this->fileName)) return 0;
+        if (trim($this->fileContents) === '') return 0;
+        return $this->getLineNumberFromUser();
+    }
+
+    private function setFileContents(): void
+    {
+        $this->fileContents = File::get($this->fileName);
+    }
+
+    public function getLineNumberFromUser(): int
+    {
+        while (true) {
+            $lineNumber = $this->ask('Input line number');
+            if (filter_var($lineNumber, FILTER_VALIDATE_INT) && $lineNumber > 0) return (int)$lineNumber;
+            $this->error('Line number has to be a positive integer value');
+        }
+    }
+
+    private function writeToFile($body, $lineNumber): bool
+    {
+        if ($lineNumber === 0) return File::put($this->fileName, $body);
+        $contentArr = explode(PHP_EOL, $this->fileContents);
+        array_splice($contentArr, $lineNumber-1, 0, $body);
+        $body = implode(PHP_EOL, $contentArr);
+        return File::put($this->fileName, $body);
     }
 
     /**
